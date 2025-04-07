@@ -276,10 +276,15 @@ export async function genStatic({ config, urls }) {
     });
 }
 
-export default (config: ConfigProps = CONFIG) =>
-  genUrls(config)
-    .then(genStatic)
-    .catch((err) => {
-      console.error("Error generating static pages: ", err);
-      process.exit(1);
-    });
+export const generate = async (config: ConfigProps = CONFIG) => {
+  try {
+    const urlsData = await genUrls(config);
+    await genStatic(urlsData);
+  } catch (err) {
+    console.error("Error generating static pages: ", err);
+    process.exit(1);
+  }
+};
+
+export default generate;
+
