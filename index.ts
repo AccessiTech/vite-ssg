@@ -1,11 +1,11 @@
-import { createServer, ViteDevServer } from "vite";
+import { createServer, ServerOptions, UserConfig, ViteDevServer } from "vite";
 import reactPlugin from "@vitejs/plugin-react-swc";
 import path from "node:path";
 import fs from "node:fs";
 import { XMLParser } from "fast-xml-parser";
 
 export const getMetaData = (text: string): { [key: string]: string } => {
-  const metaData = {};
+  const metaData:{[key:string]: string} = {};
   const lines = text.split("\n");
   lines.forEach((line) => {
     const key = line.split(":")[0]?.replace("<!--", "").trim();
@@ -17,6 +17,8 @@ export const getMetaData = (text: string): { [key: string]: string } => {
   return metaData;
 };
 
+export interface ViteServerProps extends UserConfig {}
+
 export interface ConfigProps {
   urlSrc: string;
   dest: string;
@@ -24,16 +26,7 @@ export interface ConfigProps {
   staticMetaData: string[];
   productionUrlBase: string;
   pathsBuilder: (items: any[]) => string[];
-  viteServer: {
-    root: string;
-    plugins: any[];
-    server: {
-      middlewareMode: boolean;
-      port: number;
-      ssr: boolean;
-    };
-    appType: string;
-  };
+  viteServer: ViteServerProps;
   ssrEntry: string;
 }
 
@@ -53,7 +46,7 @@ export const CONFIG: ConfigProps = {
   viteServer: {
     root: path.resolve(process.cwd()),
     plugins: [reactPlugin()],
-    server: { middlewareMode: true, port: 3000, ssr: true },
+    server: { middlewareMode: true, port: 3000, ssr: true } as ServerOptions,
     appType: "custom",
   },
   ssrEntry: "src/server.tsx",
@@ -105,7 +98,12 @@ export const genEntry = async (url: string) => {
   };
 };
 
-export async function genStatic({ config, urls }) {
+export interface GenStaticProps {
+  config: ConfigProps;
+  urls: string[];
+}
+
+export async function genStatic({ config, urls }: GenStaticProps) {
   // pre-load the blog entries
   // todo - make this configurable
   const blogEntries: any[] = await Promise.all(
@@ -144,8 +142,7 @@ export async function genStatic({ config, urls }) {
     console.log("Blog entries dispatched to store");
 
     // load the index.html and render the App
-    const toBuildPath = (pathPart) =>
-      path.join(path.resolve(process.cwd(), config.dest), pathPart);
+    const toBuildPath = (pathPart: string) => path.join(config.dest, pathPart);
     const indexHtmlContent = fs
       .readFileSync(toBuildPath("index.html"))
       .toString();
@@ -204,7 +201,7 @@ export async function genStatic({ config, urls }) {
 
     // parse the metadata string into a library
     const metaTagStrings = metadataString.replace(/></g, ">^<").split("^");
-    const metaTagLib = metaTagStrings.reduce((acc, metaTag) => {
+    const metaTagLib = metaTagStrings.reduce((acc:{[key:string]:string}, metaTag:string) => {
       if (!metaTag) return acc;
       const tagType = (metaTag.match(/<(\w+)/) || [])[1];
       if (tagType === "title") {
@@ -218,7 +215,6 @@ export async function genStatic({ config, urls }) {
       if (!tagProperty || !tagPropertyValue) return acc;
       return { ...acc, [tagPropertyValue]: metaTag };
     }, {});
-    console.log("Meta tags parsed", metaTagLib);
 
     // Merge new metadata tags onto existing head metadata
     const newHeadStrings: string[] = [];
