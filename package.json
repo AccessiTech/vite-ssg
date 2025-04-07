@@ -1,0 +1,18 @@
+{
+  "name": "@accessitech/vite-ssg",
+  "version": "0.0.1",
+  "description": "A framework agnostic static site generator (ssg) using Vite.",
+  "main": "index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "static",
+    "site",
+    "generator",
+    "ssg",
+    "vite"
+  ],
+  "author": "AccessiTech LLC",
+  "license": "MIT"
+}
