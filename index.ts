@@ -28,6 +28,7 @@ export interface ConfigProps {
   pathsBuilder: (items: any[]) => string[];
   viteServer: ViteServerProps;
   ssrEntry: string;
+  replaceIndexHtml?: boolean;
 }
 
 // todo: move this to a config file
@@ -284,9 +285,11 @@ export async function genStatic({ config, urls }: GenStaticProps) {
       throw new Error(e);
     });
 
-  // remove original index.html file and rename .html to index.html
-  fs.renameSync(toBuildPath("index.html", config), toBuildPath("_.html", config));
-  fs.renameSync(toBuildPath(".html", config), toBuildPath("index.html", config));
+  if (config.replaceIndexHtml) {
+    // remove original index.html file and rename .html to index.html
+    fs.renameSync(toBuildPath("index.html", config), toBuildPath("_.html", config));
+    fs.renameSync(toBuildPath(".html", config), toBuildPath("index.html", config));
+  }
 }
 
 export const toBuildPath = (file: string, config:ConfigProps) =>
