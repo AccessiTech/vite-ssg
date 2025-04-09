@@ -265,7 +265,7 @@ export async function genStatic({ config, urls }: GenStaticProps) {
   });
 
   // Execute all the promises and close the Vite server
-  Promise.all(vitePromises)
+  await Promise.all(vitePromises)
     .then(() => {
       console.log("All static pages generated");
       return vite.close();
