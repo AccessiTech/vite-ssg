@@ -285,6 +285,9 @@ export async function genStatic({ config, urls }: GenStaticProps) {
     });
 }
 
+export const toBuildPath = (file: string, config:ConfigProps) =>
+  path.resolve(process.cwd(), config.dest, file);
+
 export const generate = async (config: ConfigProps = CONFIG) => {
   try {
     const urlsData = await genUrls(config);
