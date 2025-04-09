@@ -155,10 +155,19 @@ export async function genStatic({ config, urls }: GenStaticProps) {
     }
 
     // update the index.html with the rendered markup
-    const urlHtmlContent = indexHtmlContent.replace(
+    let urlHtmlContent = indexHtmlContent.replace(
       '<div id="root"></div>',
       `<div id="root">${urlHtmlMarkup}</div>`
     );
+
+    // if ssg:noscript is present, populate the <noscript> tag
+    const ssgNoScriptIndex = urlHtmlContent.indexOf("<!-- ssg:noscript -->");
+    if (ssgNoScriptIndex !== -1) {
+      urlHtmlContent = urlHtmlContent.replace(
+        "<!-- ssg:noscript -->",
+        urlHtmlMarkup
+      );
+    }
 
     // get the page metadata
     let metadata: any;
