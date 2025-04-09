@@ -255,7 +255,7 @@ export async function genStatic({ config, urls }: GenStaticProps) {
     }
 
     // rejoin the head strings and the rest of the html content
-    const newHeadString = newHeadStrings.join("");
+    const newHeadString = newHeadStrings.join("\n");
     const urlHtmlContentWithMetadata = `${newHeadString}${urlHtmlContent.slice(
       headEndIndex
     )}`;
