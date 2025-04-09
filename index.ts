@@ -252,9 +252,13 @@ export async function genStatic({ config, urls }: GenStaticProps) {
     )}`;
 
     // write the new html content to the build directory
-    if (!fs.existsSync(toBuildPath(url))) {
-      fs.mkdirSync(toBuildPath(url));
+    // if subdirectory doesn't exist, create it
+    const subDir = path.dirname(url);
+    const subDirPath = path.join(config.dest, subDir);
+    if (!fs.existsSync(subDirPath)) {
+      fs.mkdirSync(subDirPath, { recursive: true });
     }
+    // write the html file to the build directory
     fs.writeFileSync(toBuildPath(url + ".html"), urlHtmlContentWithMetadata);
 
     console.log(`Static page generated for ${url}`);
