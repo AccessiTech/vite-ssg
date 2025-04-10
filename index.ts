@@ -295,9 +295,32 @@ export async function genStatic({ config, urls }: GenStaticProps) {
 export const toBuildPath = (file: string, config:ConfigProps) =>
   path.resolve(process.cwd(), config.dest, file);
 
-export const generate = async (config: ConfigProps = CONFIG) => {
+export const generate = async (config?: ConfigProps) => {
+  // check if the config file exists
+  const configPathTs = path.resolve(process.cwd(), "ssg.config.ts");
+  const configPathJs = path.resolve(process.cwd(), "ssg.config.js");
+  const configPathJson = path.resolve(process.cwd(), "ssg.config.json");
+  const configTsExists = fs.existsSync(configPathTs);
+  const configJsExists = fs.existsSync(configPathJs);
+  const configJsonExists = fs.existsSync(configPathJson);
+  let configuration = config || CONFIG;
+
+  if (configTsExists) {
+    configuration = (await import(configPathTs)).config;
+  } else if (configJsExists) {
+    configuration = (await import(configPathJs)).config;
+  } else if (configJsonExists) {
+    const configJson = fs.readFileSync(configPathJson, "utf-8");
+    configuration = JSON.parse(configJson);
+  }
+  
+  if (!configuration) {
+    console.error("No configuration found");
+    process.exit(1);
+  }
+
   try {
-    const urlsData = await genUrls(config);
+    const urlsData = await genUrls(configuration);
     await genStatic(urlsData);
   } catch (err) {
     console.error("Error generating static pages: ", err);
