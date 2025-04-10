@@ -4,18 +4,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { XMLParser } from "fast-xml-parser";
 
-export const getMetaData = (text: string): { [key: string]: string } => {
-  const metaData:{[key:string]: string} = {};
-  const lines = text.split("\n");
-  lines.forEach((line) => {
-    const key = line.split(":")[0]?.replace("<!--", "").trim();
-    const value = line.split(":")[1]?.replace("-->", "").trim();
-    if (key && value) {
-      metaData[key] = value;
-    }
-  });
-  return metaData;
-};
+
 
 export interface ViteServerProps extends UserConfig {}
 
@@ -106,7 +95,7 @@ export async function genStatic({ config, urls }: GenStaticProps) {
   const vitePromises = urls.map(async (url: string, index: number) => {
     // load the server entry for the page
     console.log("Loading Vite module for", url, "...");
-    const { render, renderMetadata, preload } = await vite
+    const { render, renderMetadata, preload, fetchMetaData } = await vite
       .ssrLoadModule(path.resolve(process.cwd(), config.ssrEntry))
       .catch((err) => {
         console.error(err);
@@ -158,16 +147,13 @@ export async function genStatic({ config, urls }: GenStaticProps) {
       );
       metadata = (await import(metadataPath)).default;
     } else {
-      // load the metadata from the blog post markdown file
-      const fileContent = fs.readFileSync(
-        path.resolve(
-          process.cwd(),
-          "public/data/blog",
-          `${url.split("/").pop()}.md`
-        ),
-        { encoding: "utf-8" }
-      );
-      metadata = getMetaData(fileContent);
+      // load the metadata from the provided file
+      if (fetchMetaData) {
+        metadata = (await fetchMetaData(url)).metaData;
+      } else {
+        metadata = {};
+        console.warn("No fetchMetaData function provided");
+      }
       metadata.canonical = `${config.productionUrlBase}${url}`;
     }
 
