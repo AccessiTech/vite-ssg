@@ -45,7 +45,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generate = exports.toBuildPath = exports.genEntry = exports.CONFIG = exports.getMetaData = void 0;
+exports.generate = exports.toBuildPath = exports.defineConfig = exports.CONFIG = void 0;
 exports.genUrls = genUrls;
 exports.genStatic = genStatic;
 const vite_1 = require("vite");
@@ -53,20 +53,6 @@ const plugin_react_swc_1 = __importDefault(require("@vitejs/plugin-react-swc"));
 const node_path_1 = __importDefault(require("node:path"));
 const node_fs_1 = __importDefault(require("node:fs"));
 const fast_xml_parser_1 = require("fast-xml-parser");
-const getMetaData = (text) => {
-    const metaData = {};
-    const lines = text.split("\n");
-    lines.forEach((line) => {
-        var _a, _b;
-        const key = (_a = line.split(":")[0]) === null || _a === void 0 ? void 0 : _a.replace("<!--", "").trim();
-        const value = (_b = line.split(":")[1]) === null || _b === void 0 ? void 0 : _b.replace("-->", "").trim();
-        if (key && value) {
-            metaData[key] = value;
-        }
-    });
-    return metaData;
-};
-exports.getMetaData = getMetaData;
 // todo: move this to a config file
 exports.CONFIG = Object.assign({ urlSrc: "public/rss.xml", dest: "docs", staticPaths: ["/", "/blog"], staticMetaData: ["src/App/meta.ts", "src/pages/Blog/meta.ts"], productionUrlBase: "https://accessi.tech", pathsBuilder: (items) => items.map((item) => {
         var _a;
@@ -79,6 +65,11 @@ exports.CONFIG = Object.assign({ urlSrc: "public/rss.xml", dest: "docs", staticP
         server: { middlewareMode: true, port: 3000, ssr: true },
         appType: "custom",
     }, ssrEntry: "src/server.tsx" }, process.argv);
+const defineConfig = (config) => {
+    var _a;
+    return Object.assign(Object.assign(Object.assign({}, exports.CONFIG), config), { viteServer: Object.assign(Object.assign(Object.assign({}, exports.CONFIG.viteServer), (config.viteServer || {})), { server: Object.assign(Object.assign({}, exports.CONFIG.viteServer.server), (((_a = config.viteServer) === null || _a === void 0 ? void 0 : _a.server) || {})) }) });
+};
+exports.defineConfig = defineConfig;
 // todo: make this configurable
 function genUrls(config) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -93,39 +84,8 @@ function genUrls(config) {
         return { config, urls };
     });
 }
-const genEntry = (url) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
-    const id = ((_a = url.split("/").pop()) === null || _a === void 0 ? void 0 : _a.replace(".md", "")) || "";
-    const fileContent = node_fs_1.default.readFileSync(node_path_1.default.resolve(process.cwd(), "public/data/blog", `${id}.md`), { encoding: "utf-8" });
-    const metaData = (0, exports.getMetaData)(fileContent);
-    const content = Object.keys(metaData).length
-        ? fileContent.substring(fileContent.indexOf("-->") + 3, fileContent.length)
-        : fileContent;
-    const description = metaData["description"] || "";
-    const image = metaData["image"] || "";
-    const image_alt = metaData["image_alt"] || "";
-    const title = metaData["title"] || content.split("\n")[0].replace("# ", "");
-    const date = metaData["date"] || "";
-    return {
-        loaded: true,
-        id,
-        title,
-        content,
-        date,
-        description,
-        image,
-        image_alt,
-    };
-});
-exports.genEntry = genEntry;
 function genStatic(_a) {
     return __awaiter(this, arguments, void 0, function* ({ config, urls }) {
-        // pre-load the blog entries
-        // todo - make this configurable
-        const blogEntries = yield Promise.all(urls
-            .filter((url) => !config.staticPaths.includes(url))
-            .map(exports.genEntry));
-        console.log("Blog entries loaded");
         // create the Vite server
         const vite = yield (0, vite_1.createServer)(config.viteServer).catch((err) => {
             console.error(err);
@@ -136,19 +96,17 @@ function genStatic(_a) {
         const vitePromises = urls.map((url, index) => __awaiter(this, void 0, void 0, function* () {
             // load the server entry for the page
             console.log("Loading Vite module for", url, "...");
-            const { render, renderMetadata, dispatchEntry } = yield vite
+            const { render, renderMetadata, preload, fetchMetaData } = yield vite
                 .ssrLoadModule(node_path_1.default.resolve(process.cwd(), config.ssrEntry))
                 .catch((err) => {
                 console.error(err);
                 throw new Error(err);
             });
             console.log("Vite loaded module  for ", url);
-            // todo - make this configurable
-            // dispatch the blog entries to the store
-            for (const entry of blogEntries) {
-                yield dispatchEntry(entry);
+            if (preload && !config.staticPaths.includes(url)) {
+                yield preload(url);
+                console.log("Preloaded data for", url);
             }
-            console.log("Blog entries dispatched to store");
             // load the index.html and render the App
             const toBuildPath = (pathPart) => node_path_1.default.join(config.dest, pathPart);
             const indexHtmlContent = node_fs_1.default
@@ -176,9 +134,14 @@ function genStatic(_a) {
                 metadata = (yield Promise.resolve(`${metadataPath}`).then(s => __importStar(require(s)))).default;
             }
             else {
-                // load the metadata from the blog post markdown file
-                const fileContent = node_fs_1.default.readFileSync(node_path_1.default.resolve(process.cwd(), "public/data/blog", `${url.split("/").pop()}.md`), { encoding: "utf-8" });
-                metadata = (0, exports.getMetaData)(fileContent);
+                // load the metadata from the provided file
+                if (fetchMetaData) {
+                    metadata = (yield fetchMetaData(url)).metaData;
+                }
+                else {
+                    metadata = {};
+                    console.warn("No fetchMetaData function provided");
+                }
                 metadata.canonical = `${config.productionUrlBase}${url}`;
             }
             // define the existing head content of index.html
@@ -273,19 +236,23 @@ function genStatic(_a) {
 const toBuildPath = (file, config) => node_path_1.default.resolve(process.cwd(), config.dest, file);
 exports.toBuildPath = toBuildPath;
 const generate = (config) => __awaiter(void 0, void 0, void 0, function* () {
+    // check if the config file exists
     const configPathTs = node_path_1.default.resolve(process.cwd(), "ssg.config.ts");
     const configPathJs = node_path_1.default.resolve(process.cwd(), "ssg.config.js");
-    // check if the config file exists
+    const configPathJson = node_path_1.default.resolve(process.cwd(), "ssg.config.json");
     const configTsExists = node_fs_1.default.existsSync(configPathTs);
     const configJsExists = node_fs_1.default.existsSync(configPathJs);
+    const configJsonExists = node_fs_1.default.existsSync(configPathJson);
     let configuration = config || exports.CONFIG;
     if (configTsExists) {
-        configuration = yield Promise.resolve(`${configPathTs}`).then(s => __importStar(require(s)));
-        console.log("Configuration loaded from ts: ", configuration);
+        configuration = (yield Promise.resolve(`${configPathTs}`).then(s => __importStar(require(s)))).config;
     }
     else if (configJsExists) {
-        configuration = (yield Promise.resolve(`${configPathJs}`).then(s => __importStar(require(s))));
-        console.log("Configuration loaded from js: ", configuration);
+        configuration = (yield Promise.resolve(`${configPathJs}`).then(s => __importStar(require(s)))).config;
+    }
+    else if (configJsonExists) {
+        const configJson = node_fs_1.default.readFileSync(configPathJson, "utf-8");
+        configuration = JSON.parse(configJson);
     }
     if (!configuration) {
         console.error("No configuration found");

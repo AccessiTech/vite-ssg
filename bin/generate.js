@@ -11,12 +11,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 const _1 = require("./");
 (() => __awaiter(void 0, void 0, void 0, function* () {
-    console.log("Starting static site generation...");
     yield (0, _1.generate)()
         .catch((error) => {
         console.error("Error during static site generation:", error);
         process.exit(1);
     });
-    console.log("...static site generation finished.");
 }))();
 //# sourceMappingURL=generate.js.map
