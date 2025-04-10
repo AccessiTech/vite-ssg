@@ -4,18 +4,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { XMLParser } from "fast-xml-parser";
 
-export const getMetaData = (text: string): { [key: string]: string } => {
-  const metaData:{[key:string]: string} = {};
-  const lines = text.split("\n");
-  lines.forEach((line) => {
-    const key = line.split(":")[0]?.replace("<!--", "").trim();
-    const value = line.split(":")[1]?.replace("-->", "").trim();
-    if (key && value) {
-      metaData[key] = value;
-    }
-  });
-  return metaData;
-};
+
 
 export interface ViteServerProps extends UserConfig {}
 
@@ -55,6 +44,21 @@ export const CONFIG: ConfigProps = {
   ...process.argv,
 };
 
+export const defineConfig = (config: ConfigProps):ConfigProps => {
+  return {
+    ...CONFIG,
+    ...config,
+    viteServer: {
+      ...CONFIG.viteServer,
+      ...(config.viteServer || {}),
+      server: {
+        ...CONFIG.viteServer.server,
+        ...(config.viteServer?.server || {}),
+      },
+    },
+  };
+};
+
 // todo: make this configurable
 export async function genUrls(config: ConfigProps) {
   const RSS = fs.readFileSync(
@@ -71,33 +75,6 @@ export async function genUrls(config: ConfigProps) {
   return { config, urls };
 }
 
-export const genEntry = async (url: string) => {
-  const id = url.split("/").pop()?.replace(".md", "") || "";
-  const fileContent = fs.readFileSync(
-    path.resolve(process.cwd(), "public/data/blog", `${id}.md`),
-    { encoding: "utf-8" }
-  );
-  const metaData = getMetaData(fileContent);
-  const content = Object.keys(metaData).length
-    ? fileContent.substring(fileContent.indexOf("-->") + 3, fileContent.length)
-    : fileContent;
-  const description = metaData["description"] || "";
-  const image = metaData["image"] || "";
-  const image_alt = metaData["image_alt"] || "";
-  const title = metaData["title"] || content.split("\n")[0].replace("# ", "");
-  const date = metaData["date"] || "";
-
-  return {
-    loaded: true,
-    id,
-    title,
-    content,
-    date,
-    description,
-    image,
-    image_alt,
-  };
-};
 
 export interface GenStaticProps {
   config: ConfigProps;
@@ -105,15 +82,6 @@ export interface GenStaticProps {
 }
 
 export async function genStatic({ config, urls }: GenStaticProps) {
-  // pre-load the blog entries
-  // todo - make this configurable
-  const blogEntries: any[] = await Promise.all(
-    urls
-      .filter((url: string) => !config.staticPaths.includes(url))
-      .map(genEntry)
-  );
-  console.log("Blog entries loaded");
-
   // create the Vite server
   const vite: ViteDevServer = await createServer(config.viteServer).catch(
     (err) => {
@@ -127,7 +95,7 @@ export async function genStatic({ config, urls }: GenStaticProps) {
   const vitePromises = urls.map(async (url: string, index: number) => {
     // load the server entry for the page
     console.log("Loading Vite module for", url, "...");
-    const { render, renderMetadata, dispatchEntry } = await vite
+    const { render, renderMetadata, preload, fetchMetaData } = await vite
       .ssrLoadModule(path.resolve(process.cwd(), config.ssrEntry))
       .catch((err) => {
         console.error(err);
@@ -135,12 +103,10 @@ export async function genStatic({ config, urls }: GenStaticProps) {
       });
     console.log("Vite loaded module  for ", url);
 
-    // todo - make this configurable
-    // dispatch the blog entries to the store
-    for (const entry of blogEntries) {
-      await dispatchEntry(entry);
+    if (preload && !config.staticPaths.includes(url)) {
+      await preload(url);
+      console.log("Preloaded data for", url);
     }
-    console.log("Blog entries dispatched to store");
 
     // load the index.html and render the App
     const toBuildPath = (pathPart: string) => path.join(config.dest, pathPart);
@@ -181,16 +147,13 @@ export async function genStatic({ config, urls }: GenStaticProps) {
       );
       metadata = (await import(metadataPath)).default;
     } else {
-      // load the metadata from the blog post markdown file
-      const fileContent = fs.readFileSync(
-        path.resolve(
-          process.cwd(),
-          "public/data/blog",
-          `${url.split("/").pop()}.md`
-        ),
-        { encoding: "utf-8" }
-      );
-      metadata = getMetaData(fileContent);
+      // load the metadata from the provided file
+      if (fetchMetaData) {
+        metadata = (await fetchMetaData(url)).metaData;
+      } else {
+        metadata = {};
+        console.warn("No fetchMetaData function provided");
+      }
       metadata.canonical = `${config.productionUrlBase}${url}`;
     }
 
@@ -329,4 +292,3 @@ export const generate = async (config?: ConfigProps) => {
 };
 
 export default generate;
-
