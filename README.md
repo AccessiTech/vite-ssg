@@ -16,6 +16,15 @@ This project is built on top of Vite, a fast build tool that provides a great de
 - **Easy to use**: Simple API and configuration.
 - **Customizable**: Easily extendable with plugins and custom configurations.
 
+### What the Script Does
+
+1. **Fetches the RSS feed**: The script fetches the RSS feed from the specified URL and parses it to extract the items.
+2. **Preloads the data**: The script preloads the data needed for rendering the app. This is done by dispatching the data to your store.
+3. **Copies the build index.html**: The script copies the build index.html file at the destination directory, and uses that as a base to generate the static HTML files.
+4. **Renders the app**: The script renders the app using the `render` function. This function takes a path as an argument and returns the rendered HTML string.
+5. **Merges the metadata**: The script renders the metadata using the `renderMetadata` function, and merges it with existing metadata from the index.html file.
+6. **Writes the static HTML files**: The script writes the resulting content to new static HTML files at the destination directory.
+
 ## Getting Started
 
 To get started, you need to install the package and its dependencies. You can do this using npm or yarn.
