@@ -52,7 +52,9 @@ The main script will use your server file specified by `config.ssrEntry` in the 
 
 1. a `render` function that takes a path as an argument and returns the rendered HTML string.
 2. a `renderMetadata` function that takes a data object as an argument and returns the rendered metadata string.
-3. (COMING SOON) a `preRender` loads your data and dispatches it to your store.
+3. a `preload` function loads your data and dispatches it to your store.
+4. a `fetchMetaData` function that takes a URL as an argument and returns the associated metadata and file content.
+5. any other business logic you need to fetch and parse your metadata.
 
 **IMPORTANT: ReactDOMServer is imported dynamically to avoid SSR issues with Vite.**
 
@@ -61,23 +63,31 @@ The main script will use your server file specified by `config.ssrEntry` in the 
 import App from './App/App';
 import { YourDataProps, YourMetadataComponent } from './Your/MetaData/Component';
 
-// coming soon
-// export const preRender = async (data:any) => {
-//   // fetch data needed for rendering
-//   // customize as needed to populate your store
-//   store.dispatch({ type: 'YOUR_ACTION', payload: data });
-// };
+export const preload = async (data:any) => {
+  // fetch data needed for rendering
+  // customize as needed to populate your store
+  store.dispatch({ type: 'YOUR_ACTION', payload: data });
+};
 
-export const render = async (path:string) => {
+export const render = async (path:string):string => {
   // customize as needed to render your app
   const ReactDOMServer = (await import('react-dom/server')).default;
   return ReactDOMServer.renderToString(<App path={path} />);
 };
 
-export const renderMetadata = async (data:YourDataProps) => {
+export const renderMetadata = async (data:YourDataProps):string => {
   // customize as needed to render your metadata
   const ReactDOMServer = (await import('react-dom/server')).default;
   return ReactDOMServer.renderToString(<YourMetadataComponent {...data} />);
+};
+
+export const fetchMetaData = async (url:string):
+  Promise<{ metaData: { [key: string]: string }, fileContent: string }>
+=> {
+  // fetch your metadata from the url
+  const fileContent:string = await businessLogicToGetFileContent(url);
+  const metaData: {[key:string]: string} = await businessLogicToParseMetaData(fileContent);
+  return { metaData, fileContent };
 };
 ```
 
