@@ -55,6 +55,21 @@ export const CONFIG: ConfigProps = {
   ...process.argv,
 };
 
+export const defineConfig = (config: ConfigProps):ConfigProps => {
+  return {
+    ...CONFIG,
+    ...config,
+    viteServer: {
+      ...CONFIG.viteServer,
+      ...(config.viteServer || {}),
+      server: {
+        ...CONFIG.viteServer.server,
+        ...(config.viteServer?.server || {}),
+      },
+    },
+  };
+};
+
 // todo: make this configurable
 export async function genUrls(config: ConfigProps) {
   const RSS = fs.readFileSync(
@@ -329,4 +344,3 @@ export const generate = async (config?: ConfigProps) => {
 };
 
 export default generate;
-
