@@ -13,6 +13,7 @@ export interface ConfigProps {
     pathsBuilder: (items: any[]) => string[];
     viteServer: ViteServerProps;
     ssrEntry: string;
+    replaceIndexHtml?: boolean;
 }
 export declare const CONFIG: ConfigProps;
 export declare function genUrls(config: ConfigProps): Promise<{
@@ -34,5 +35,6 @@ export interface GenStaticProps {
     urls: string[];
 }
 export declare function genStatic({ config, urls }: GenStaticProps): Promise<void>;
+export declare const toBuildPath: (file: string, config: ConfigProps) => string;
 export declare const generate: (config?: ConfigProps) => Promise<void>;
 export default generate;

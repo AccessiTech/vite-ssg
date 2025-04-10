@@ -45,7 +45,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generate = exports.genEntry = exports.CONFIG = exports.getMetaData = void 0;
+exports.generate = exports.toBuildPath = exports.genEntry = exports.CONFIG = exports.getMetaData = void 0;
 exports.genUrls = genUrls;
 exports.genStatic = genStatic;
 const vite_1 = require("vite");
@@ -161,7 +161,12 @@ function genStatic(_a) {
                 throw new Error(errorStr);
             }
             // update the index.html with the rendered markup
-            const urlHtmlContent = indexHtmlContent.replace('<div id="root"></div>', `<div id="root">${urlHtmlMarkup}</div>`);
+            let urlHtmlContent = indexHtmlContent.replace('<div id="root"></div>', `<div id="root">${urlHtmlMarkup}</div>`);
+            // if ssg:noscript is present, populate the <noscript> tag
+            const ssgNoScriptIndex = urlHtmlContent.indexOf("<!-- ssg:noscript -->");
+            if (ssgNoScriptIndex !== -1) {
+                urlHtmlContent = urlHtmlContent.replace("<!-- ssg:noscript -->", urlHtmlMarkup);
+            }
             // get the page metadata
             let metadata;
             const isStatic = typeof config.staticMetaData[index] !== "undefined";
@@ -235,17 +240,21 @@ function genStatic(_a) {
                 newHeadStrings.push(metaTagLib[key]);
             }
             // rejoin the head strings and the rest of the html content
-            const newHeadString = newHeadStrings.join("");
+            const newHeadString = newHeadStrings.join("\n");
             const urlHtmlContentWithMetadata = `${newHeadString}${urlHtmlContent.slice(headEndIndex)}`;
             // write the new html content to the build directory
-            if (!node_fs_1.default.existsSync(toBuildPath(url))) {
-                node_fs_1.default.mkdirSync(toBuildPath(url));
+            // if subdirectory doesn't exist, create it
+            const subDir = node_path_1.default.dirname(url);
+            const subDirPath = node_path_1.default.join(config.dest, subDir);
+            if (!node_fs_1.default.existsSync(subDirPath)) {
+                node_fs_1.default.mkdirSync(subDirPath, { recursive: true });
             }
+            // write the html file to the build directory
             node_fs_1.default.writeFileSync(toBuildPath(url + ".html"), urlHtmlContentWithMetadata);
             console.log(`Static page generated for ${url}`);
         }));
         // Execute all the promises and close the Vite server
-        Promise.all(vitePromises)
+        yield Promise.all(vitePromises)
             .then(() => {
             console.log("All static pages generated");
             return vite.close();
@@ -254,11 +263,36 @@ function genStatic(_a) {
             console.error("Error generating static pages: ", e);
             throw new Error(e);
         });
+        if (config.replaceIndexHtml) {
+            // remove original index.html file and rename .html to index.html
+            node_fs_1.default.renameSync((0, exports.toBuildPath)("index.html", config), (0, exports.toBuildPath)("_.html", config));
+            node_fs_1.default.renameSync((0, exports.toBuildPath)(".html", config), (0, exports.toBuildPath)("index.html", config));
+        }
     });
 }
-const generate = (...args_1) => __awaiter(void 0, [...args_1], void 0, function* (config = exports.CONFIG) {
+const toBuildPath = (file, config) => node_path_1.default.resolve(process.cwd(), config.dest, file);
+exports.toBuildPath = toBuildPath;
+const generate = (config) => __awaiter(void 0, void 0, void 0, function* () {
+    const configPathTs = node_path_1.default.resolve(process.cwd(), "ssg.config.ts");
+    const configPathJs = node_path_1.default.resolve(process.cwd(), "ssg.config.js");
+    // check if the config file exists
+    const configTsExists = node_fs_1.default.existsSync(configPathTs);
+    const configJsExists = node_fs_1.default.existsSync(configPathJs);
+    let configuration = config || exports.CONFIG;
+    if (configTsExists) {
+        configuration = yield Promise.resolve(`${configPathTs}`).then(s => __importStar(require(s)));
+        console.log("Configuration loaded from ts: ", configuration);
+    }
+    else if (configJsExists) {
+        configuration = (yield Promise.resolve(`${configPathJs}`).then(s => __importStar(require(s))));
+        console.log("Configuration loaded from js: ", configuration);
+    }
+    if (!configuration) {
+        console.error("No configuration found");
+        process.exit(1);
+    }
     try {
-        const urlsData = yield genUrls(config);
+        const urlsData = yield genUrls(configuration);
         yield genStatic(urlsData);
     }
     catch (err) {
