@@ -67,9 +67,13 @@ export async function genUrls(config: ConfigProps) {
   );
   const parser = new XMLParser();
   const rssOjb = parser.parse(RSS);
-  const items = rssOjb.rss.channel.item?.length
+  const items = rssOjb.rss.channel.lenth === 1 ? rssOjb.rss.channel.item?.length
     ? rssOjb.rss.channel.item
-    : [rssOjb.rss.channel.item];
+    : [rssOjb.rss.channel.item]
+    
+    : rssOjb.rss.channel.map((channel: any) => {
+      return channel.item?.length ? channel.item : [channel.item];
+    }).flat();
 
   const urls = config.staticPaths?.concat(config.pathsBuilder(items)) || [];
   return { config, urls };
@@ -101,11 +105,11 @@ export async function genStatic({ config, urls }: GenStaticProps) {
         console.error(err);
         throw new Error(err);
       });
-    console.log("Vite loaded module  for ", url);
+    // console.log("Vite loaded module  for ", url);
 
     if (preload && !config.staticPaths.includes(url)) {
       await preload(url);
-      console.log("Preloaded data for", url);
+      // console.log("Preloaded data for", url);
     }
 
     // load the index.html and render the App
