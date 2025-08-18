@@ -2,11 +2,13 @@
   "name": "@accessitech/vite-ssg",
   "version": "1.0.0",
   "description": "A framework agnostic static site generator (ssg) using Vite.",
-  "main": "index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "engines": {
     "node": "v20.19.4"
   },
   "scripts": {
+    "build": "tsc",
     "tsc": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
