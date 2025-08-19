@@ -11,7 +11,7 @@
     "node": "v20.19.4"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "rm -rf dist && tsc",
     "tsc": "tsc",
     "test": "vitest",
     "test:ui": "vitest --ui",
