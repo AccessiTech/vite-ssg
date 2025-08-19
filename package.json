@@ -4,6 +4,9 @@
   "description": "A framework agnostic static site generator (ssg) using Vite.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "vite-ssg": "./dist/index.js"
+  },
   "engines": {
     "node": "v20.19.4"
   },
