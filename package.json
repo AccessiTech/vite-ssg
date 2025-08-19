@@ -10,7 +10,9 @@
   "scripts": {
     "build": "tsc",
     "tsc": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run"
   },
   "keywords": [
     "static",
@@ -22,12 +24,16 @@
   "author": "AccessiTech LLC",
   "license": "MIT",
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.7.0",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react-swc": "^3.8.1",
+    "@vitest/ui": "^3.2.4",
     "fast-xml-parser": "^5.2.0",
+    "jsdom": "^26.1.0",
     "sass": "1.32.13",
     "tsx": "^4.19.3",
     "typescript": "^5.8.3",
-    "vite": "^6.2.5"
+    "vite": "^6.2.5",
+    "vitest": "^3.2.4"
   }
 }
