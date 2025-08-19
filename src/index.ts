@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 import { createServer, ServerOptions, UserConfig, ViteDevServer } from "vite";
 import reactPlugin from "@vitejs/plugin-react-swc";
 import path from "node:path";
