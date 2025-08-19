@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { generate } from "./";
+const { generate } = require('./index');
 
 // Get command line arguments
 const args = process.argv.slice(2);

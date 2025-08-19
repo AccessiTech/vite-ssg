@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { generate } from "./";
+import { generate } from "./index";
 
 (async () => {
   await generate()
