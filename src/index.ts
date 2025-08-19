@@ -149,7 +149,12 @@ export async function genStatic({ config, urls }: GenStaticProps) {
         process.cwd(),
         config.staticMetaData[index]
       );
-      metadata = (await import(metadataPath)).default;
+      try {
+        metadata = require(metadataPath).default;
+      } catch (error) {
+        console.warn(`Could not load metadata from ${metadataPath}:`, error);
+        metadata = {};
+      }
     } else {
       // load the metadata from the provided file
       if (fetchMetaData) {
@@ -273,9 +278,19 @@ export const generate = async (config?: ConfigProps) => {
   let configuration = config || CONFIG;
 
   if (configTsExists) {
-    configuration = (await import(configPathTs)).config;
+    try {
+      configuration = require(configPathTs).config;
+    } catch (error) {
+      console.warn(`Could not load config from ${configPathTs}:`, error);
+      configuration = config || CONFIG;
+    }
   } else if (configJsExists) {
-    configuration = (await import(configPathJs)).config;
+    try {
+      configuration = require(configPathJs).config;
+    } catch (error) {
+      console.warn(`Could not load config from ${configPathJs}:`, error);
+      configuration = config || CONFIG;
+    }
   } else if (configJsonExists) {
     const configJson = fs.readFileSync(configPathJson, "utf-8");
     configuration = JSON.parse(configJson);
