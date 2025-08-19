@@ -38,6 +38,18 @@ export const CONFIG: ConfigProps = {
     plugins: [reactPlugin()],
     server: { middlewareMode: true, port: 3000, ssr: true } as ServerOptions,
     appType: "custom",
+    ssr: {
+      noExternal: true, // Bundle all dependencies for SSR
+      external: ['@accessitech/vite-ssg'], // Don't bundle this package itself
+    },
+    css: {
+      modules: {
+        generateScopedName: "[name]__[local]___[hash:base64:5]",
+      },
+    },
+    optimizeDeps: {
+      include: ['react', 'react-dom'],
+    },
   },
   ssrEntry: "src/server.tsx",
   // spread the process args onto the config
