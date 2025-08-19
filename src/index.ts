@@ -39,7 +39,7 @@ export const CONFIG: ConfigProps = {
     server: { middlewareMode: true, port: 3000, ssr: true } as ServerOptions,
     appType: "custom",
     ssr: {
-      noExternal: /^(?!node:)/,
+      external: ['react', 'react-dom'],
       target: 'node',
     },
     css: {
@@ -48,11 +48,12 @@ export const CONFIG: ConfigProps = {
       },
     },
     optimizeDeps: {
-      include: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
+      include: ['react/jsx-runtime', 'react/jsx-dev-runtime'],
     },
     define: {
       global: 'globalThis',
       'process.env.NODE_ENV': '"development"',
+      module: '{ exports: {} }',
     },
     esbuild: {
       jsx: 'automatic',
@@ -105,8 +106,15 @@ export interface GenStaticProps {
 }
 
 export async function genStatic({ config, urls }: GenStaticProps) {
-  // create the Vite server
-  const vite: ViteDevServer = await createServer(config.viteServer).catch(
+  // create the Vite server with enhanced configuration
+  const serverConfig = {
+    ...config.viteServer,
+    ssr: {
+      ...config.viteServer.ssr,
+    },
+  };
+  
+  const vite: ViteDevServer = await createServer(serverConfig).catch(
     (err) => {
       console.error(err);
       throw new Error(err);
