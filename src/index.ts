@@ -39,8 +39,8 @@ export const CONFIG: ConfigProps = {
     server: { middlewareMode: true, port: 3000, ssr: true } as ServerOptions,
     appType: "custom",
     ssr: {
-      noExternal: true, // Bundle all dependencies for SSR
-      external: ['@accessitech/vite-ssg'], // Don't bundle this package itself
+      noExternal: /^(?!node:)/,
+      target: 'node',
     },
     css: {
       modules: {
@@ -48,7 +48,14 @@ export const CONFIG: ConfigProps = {
       },
     },
     optimizeDeps: {
-      include: ['react', 'react-dom'],
+      include: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
+    },
+    define: {
+      global: 'globalThis',
+      'process.env.NODE_ENV': '"development"',
+    },
+    esbuild: {
+      jsx: 'automatic',
     },
   },
   ssrEntry: "src/server.tsx",
