@@ -46,6 +46,21 @@ export const CONFIG: ConfigProps = {
       modules: {
         generateScopedName: "[name]__[local]___[hash:base64:5]",
       },
+      preprocessorOptions: {
+        scss: {
+          includePaths: [
+            path.resolve(process.cwd(), 'src'),
+            path.resolve(process.cwd(), 'node_modules'),
+            path.resolve(process.cwd()),
+          ],
+        },
+      },
+    },
+    resolve: {
+      alias: {
+        '@': path.resolve(process.cwd(), 'src'),
+        '~': path.resolve(process.cwd(), 'node_modules'),
+      },
     },
     optimizeDeps: {
       include: ['react/jsx-runtime', 'react/jsx-dev-runtime'],
