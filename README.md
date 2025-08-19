@@ -39,6 +39,23 @@ npm install -D @accessitech/vite-ssg tsx
 yarn add -D @accessitech/vite-ssg tsx
 ```
 
+### TypeScript Source Integration (Advanced)
+
+For TypeScript projects that want to work directly with the source TypeScript files (for better debugging, source maps, and development experience), this package exposes its TypeScript source files through the `exports.typescript` field.
+
+Modern TypeScript tools and bundlers (like Vite, webpack 5+, etc.) will automatically prefer the TypeScript source when available. This allows you to:
+
+- Get better source maps that point to the original TypeScript files
+- Debug directly in the source TypeScript code
+- Get full IntelliSense and type information
+- Have your bundler handle the compilation optimally
+
+To use JavaScript config files in ES module projects (which is recommended for compatibility), rename your config file:
+```bash
+# Instead of ssg.config.ts, use:
+mv ssg.config.ts ssg.config.js
+```
+
 ### Basic Usage
 
 To use the package, you need to create a `ssg.config.ts` file in the root of your project. This file will contain the configuration for the SSG.
