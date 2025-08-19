@@ -38,5 +38,9 @@
     "typescript": "^5.8.3",
     "vite": "^6.2.5",
     "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "ts-node": "^10.9.2",
+    "tsx": "^4.20.4"
   }
 }
