@@ -1,6 +1,6 @@
-#!/usr/bin/env node
+#!/usr/bin/env tsx
 
-const { generate } = require('./index');
+import { generate } from './index.js';
 
 // Get command line arguments
 const args = process.argv.slice(2);
