@@ -1,12 +1,12 @@
 import { createServer, ServerOptions, UserConfig, ViteDevServer } from "vite";
-import reactPlugin from "@vitejs/plugin-react-swc";
 import path from "node:path";
 import fs from "node:fs";
+import { pathToFileURL } from "node:url";
 import { XMLParser } from "fast-xml-parser";
 
 
 
-export interface ViteServerProps extends UserConfig {}
+export interface ViteServerProps extends UserConfig { }
 
 export interface ConfigProps {
   urlSrc: string;
@@ -35,12 +35,37 @@ export const CONFIG: ConfigProps = {
     }),
   viteServer: {
     root: path.resolve(process.cwd()),
-    plugins: [reactPlugin()],
+    plugins: [], // Framework-agnostic by default, user can add their framework plugin in config
     server: { middlewareMode: true, port: 3000, ssr: true } as ServerOptions,
     appType: "custom",
     ssr: {
-      external: ['react', 'react-dom'],
+      external: [
+        // Node.js built-ins
+        'fs', 'path', 'url', 'util', 'events', 'stream', 'buffer', 'crypto', 'os',
+        // React core - these have complex internal dependencies
+        'react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime',
+        // Other problematic packages with complex internal structures
+        'use-sync-external-store',
+        'scheduler',
+        // CommonJS packages that cause issues when bundled
+        'hoist-non-react-statics',
+        'react-redux',
+        'invariant',
+        'classnames',
+        'uncontrollable',
+        'react-bootstrap',
+        'prop-types',
+        'reduxjs-toolkit-persist',
+        // CSS/SASS processing packages
+        'sass',
+        'node-sass',
+        'bootstrap',
+      ],
       target: 'node',
+      resolve: {
+        conditions: ['node', 'import', 'module', 'default'],
+        externalConditions: ['node'],
+      },
     },
     css: {
       modules: {
@@ -53,6 +78,7 @@ export const CONFIG: ConfigProps = {
             path.resolve(process.cwd(), 'node_modules'),
             path.resolve(process.cwd()),
           ],
+          silenceDeprecations: ['legacy-js-api'],
         },
       },
     },
@@ -60,15 +86,16 @@ export const CONFIG: ConfigProps = {
       alias: {
         '@': path.resolve(process.cwd(), 'src'),
         '~': path.resolve(process.cwd(), 'node_modules'),
+        'src': path.resolve(process.cwd(), 'src'),
       },
     },
     optimizeDeps: {
+      force: true, // Force re-optimization of dependencies
       include: ['react/jsx-runtime', 'react/jsx-dev-runtime'],
     },
     define: {
       global: 'globalThis',
       'process.env.NODE_ENV': '"development"',
-      module: '{ exports: {} }',
     },
     esbuild: {
       jsx: 'automatic',
@@ -79,7 +106,7 @@ export const CONFIG: ConfigProps = {
   ...process.argv,
 };
 
-export const defineConfig = (config: ConfigProps):ConfigProps => {
+export const defineConfig = (config: ConfigProps): ConfigProps => {
   return {
     ...CONFIG,
     ...config,
@@ -105,7 +132,7 @@ export async function genUrls(config: ConfigProps) {
   const items = rssOjb.rss.channel.lenth === 1 ? rssOjb.rss.channel.item?.length
     ? rssOjb.rss.channel.item
     : [rssOjb.rss.channel.item]
-    
+
     : rssOjb.rss.channel.map((channel: any) => {
       return channel.item?.length ? channel.item : [channel.item];
     }).flat();
@@ -121,14 +148,116 @@ export interface GenStaticProps {
 }
 
 export async function genStatic({ config, urls }: GenStaticProps) {
+  // create a plugin to provide browser globals in SSR
+  const ssrGlobalsPlugin = {
+    name: 'ssr-globals',
+    configureServer() {
+      // Mock DOM element for react-helmet
+      const mockElement = () => ({
+        setAttribute: () => {},
+        getAttribute: () => null,
+        appendChild: () => {},
+        removeChild: () => {},
+        querySelectorAll: () => [],
+        querySelector: () => null,
+        tagName: 'DIV',
+        innerHTML: '',
+        textContent: ''
+      });
+
+      if (typeof globalThis.window === 'undefined') {
+        (globalThis as any).window = {
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          document: {
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            createElement: mockElement,
+            getElementsByTagName: () => [],
+            querySelectorAll: () => [],
+            querySelector: () => null,
+            head: {
+              querySelectorAll: () => [],
+              querySelector: () => null,
+              appendChild: () => {},
+              removeChild: () => {}
+            },
+            body: {},
+            documentElement: {}
+          }
+        };
+      }
+      if (typeof globalThis.document === 'undefined') {
+        (globalThis as any).document = {
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          createElement: mockElement,
+          getElementsByTagName: () => [],
+          querySelectorAll: () => [],
+          querySelector: () => null,
+          head: {
+            querySelectorAll: () => [],
+            querySelector: () => null,
+            appendChild: () => {},
+            removeChild: () => {}
+          },
+          body: {},
+          documentElement: {}
+        };
+      }
+      if (typeof globalThis.navigator === 'undefined') {
+        (globalThis as any).navigator = {};
+      }
+      if (typeof globalThis.location === 'undefined') {
+        (globalThis as any).location = {};
+      }
+    }
+  };
+
+  // Plugin to completely disable CSS imports during SSR
+  const ssrCssMockPlugin = {
+    name: 'ssr-css-disable',
+    enforce: 'pre' as const, // Run before Vite's built-in CSS plugin
+    resolveId(id: string, importer?: string) {
+      // Check both the id and if it's a CSS-like file
+      if (id.includes('.scss') || id.includes('.css') || id.includes('.sass') || id.includes('.less') || id.includes('.styl') ||
+          id.endsWith('.scss') || id.endsWith('.css') || id.endsWith('.sass') || id.endsWith('.less') || id.endsWith('.styl')) {
+        return '\0virtual:css-disabled';
+      }
+      return null;
+    },
+    load(id: string) {
+      // Return empty module for the virtual CSS file
+      if (id === '\0virtual:css-disabled') {
+        return 'export default {};';
+      }
+      return null;
+    },
+  };
+
   // create the Vite server with enhanced configuration
   const serverConfig = {
     ...config.viteServer,
     ssr: {
       ...config.viteServer.ssr,
+      // Completely externalize CSS/SCSS to prevent processing during SSR
+      external: [
+        'sass',
+        'node-sass',
+        'sass-loader',
+        'postcss',
+        'autoprefixer',
+        ...(Array.isArray(config.viteServer.ssr?.external) ? config.viteServer.ssr.external : [])
+      ],
+      noExternal: Array.isArray(config.viteServer.ssr?.noExternal) ? config.viteServer.ssr.noExternal : []
     },
+    plugins: [
+      ssrCssMockPlugin, // Put CSS disable first to intercept all CSS imports
+      ...(config.viteServer.plugins || []),
+      ssrGlobalsPlugin
+    ],
   };
-  
+
   const vite: ViteDevServer = await createServer(serverConfig).catch(
     (err) => {
       console.error(err);
@@ -192,7 +321,9 @@ export async function genStatic({ config, urls }: GenStaticProps) {
         config.staticMetaData[index]
       );
       try {
-        metadata = require(metadataPath).default;
+        const metadataFileUrl = pathToFileURL(metadataPath).href;
+        const metadataModule = await import(metadataFileUrl);
+        metadata = metadataModule.default || metadataModule;
       } catch (error) {
         console.warn(`Could not load metadata from ${metadataPath}:`, error);
         metadata = {};
@@ -225,7 +356,7 @@ export async function genStatic({ config, urls }: GenStaticProps) {
 
     // parse the metadata string into a library
     const metaTagStrings = metadataString.replace(/></g, ">^<").split("^");
-    const metaTagLib = metaTagStrings.reduce((acc:{[key:string]:string}, metaTag:string) => {
+    const metaTagLib = metaTagStrings.reduce((acc: { [key: string]: string }, metaTag: string) => {
       if (!metaTag) return acc;
       const tagType = (metaTag.match(/<(\w+)/) || [])[1];
       if (tagType === "title") {
@@ -306,7 +437,7 @@ export async function genStatic({ config, urls }: GenStaticProps) {
   }
 }
 
-export const toBuildPath = (file: string, config:ConfigProps) =>
+export const toBuildPath = (file: string, config: ConfigProps) =>
   path.resolve(process.cwd(), config.dest, file);
 
 export const generate = async (config?: ConfigProps) => {
@@ -320,15 +451,16 @@ export const generate = async (config?: ConfigProps) => {
   let configuration = config || CONFIG;
 
   if (configTsExists) {
-    try {
-      configuration = require(configPathTs).config;
-    } catch (error) {
-      console.warn(`Could not load config from ${configPathTs}:`, error);
-      configuration = config || CONFIG;
-    }
+    console.warn(`Found ssg.config.ts in an ES module project.`);
+    console.warn(`TypeScript config files are not directly supported in ES module projects.`);
+    console.warn(`Please rename ssg.config.ts to ssg.config.js or add "type": "commonjs" to your package.json.`);
+    configuration = config || CONFIG;
   } else if (configJsExists) {
     try {
-      configuration = require(configPathJs).config;
+      // For JavaScript config files, use dynamic import for ES modules
+      const configFileUrl = pathToFileURL(configPathJs).href;
+      const configModule = await import(configFileUrl);
+      configuration = configModule.config || configModule.default?.config || configModule.default;
     } catch (error) {
       console.warn(`Could not load config from ${configPathJs}:`, error);
       configuration = config || CONFIG;
@@ -337,7 +469,7 @@ export const generate = async (config?: ConfigProps) => {
     const configJson = fs.readFileSync(configPathJson, "utf-8");
     configuration = JSON.parse(configJson);
   }
-  
+
   if (!configuration) {
     console.error("No configuration found");
     process.exit(1);
