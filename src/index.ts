@@ -385,10 +385,15 @@ export async function genStatic({ config, urls }: GenStaticProps) {
   const { render, preload, fetchMetaData } = await vite
     .ssrLoadModule(path.resolve(process.cwd(), config.ssrEntry))
     .catch((err) => {
-      console.error(err);
+      console.error("Failed to load SSR module:", err);
       throw new Error(err);
     });
   console.log("Vite module loaded successfully");
+  console.log("Available functions:", { 
+    render: !!render, 
+    preload: !!preload, 
+    fetchMetaData: !!fetchMetaData 
+  });
 
   // Pre-load all unique static metadata files once to avoid race conditions
   // This cache prevents multiple concurrent reads of the same metadata file
@@ -447,10 +452,27 @@ export async function genStatic({ config, urls }: GenStaticProps) {
           console.log(`Calling fetchMetaData for ${url}...`);
           const result = await fetchMetaData(url);
           console.log(`fetchMetaData result for ${url}:`, result);
-          metadata = result?.metaData || {};
+          
+          // Handle different possible return structures from fetchMetaData
+          if (result && typeof result === 'object') {
+            if (result.metaData) {
+              metadata = result.metaData;
+            } else if (result.metadata) {
+              metadata = result.metadata;
+            } else {
+              // If result doesn't have metaData or metadata property, use the result itself
+              metadata = result;
+            }
+          } else {
+            metadata = {};
+          }
+          
           console.log(`Using dynamic metadata for ${url}:`, metadata);
         } catch (error) {
           console.error(`Failed to fetch metadata for ${url}:`, error);
+          if (error instanceof Error) {
+            console.error(`Error details:`, error.message, error.stack);
+          }
           metadata = {};
         }
       } else {

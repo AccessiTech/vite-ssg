@@ -113,6 +113,15 @@ export const fetchMetaData = async (url:string):
   // fetch your metadata from the url
   const fileContent:string = await businessLogicToGetFileContent(url);
   const metaData: {[key:string]: string} = await businessLogicToParseMetaData(fileContent);
+  
+  // IMPORTANT: The function must return an object with a 'metaData' property
+  // The metaData object should contain standard metadata fields like:
+  // - title: Page title
+  // - description: Page description  
+  // - url: Canonical URL (optional, will be auto-generated if not provided)
+  // - image: Social media image URL
+  // - type: Open Graph type (article, website, etc.)
+  
   return { metaData, fileContent };
 };
 ```
