@@ -201,6 +201,16 @@ export interface GenStaticProps {
 
 // Main function to generate static pages from dynamic React SSR
 export async function genStatic({ config, urls }: GenStaticProps) {
+  // Helper function to escape HTML attributes to prevent XSS
+  const escapeHtml = (unsafe: string): string => {
+    return unsafe
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  };
+
   // Create a Vite plugin to provide browser globals in SSR environment
   // This is necessary because SSR runs in Node.js which lacks browser APIs
   const ssrGlobalsPlugin = {
@@ -389,11 +399,6 @@ export async function genStatic({ config, urls }: GenStaticProps) {
       throw new Error(err);
     });
   console.log("Vite module loaded successfully");
-  console.log("Available functions:", { 
-    render: !!render, 
-    preload: !!preload, 
-    fetchMetaData: !!fetchMetaData 
-  });
 
   // Pre-load all unique static metadata files once to avoid race conditions
   // This cache prevents multiple concurrent reads of the same metadata file
@@ -438,20 +443,15 @@ export async function genStatic({ config, urls }: GenStaticProps) {
       if (staticIndex !== -1 && config.staticMetaData[staticIndex]) {
         const metadataFile = config.staticMetaData[staticIndex];
         metadata = metadataCache[metadataFile] || {};
-        console.log(`Using static metadata for static path ${url}:`, metadata);
       } else {
         // Fallback to default metadata for static paths without metadata files
         metadata = {};
-        console.log(`No static metadata file found for static path ${url}, using empty metadata`);
       }
     } else {
       // For dynamic paths (blog posts, wcag pages), use fetchMetaData
-      console.log(`Processing dynamic path ${url}, fetchMetaData available:`, !!fetchMetaData);
       if (fetchMetaData) {
         try {
-          console.log(`Calling fetchMetaData for ${url}...`);
           const result = await fetchMetaData(url);
-          console.log(`fetchMetaData result for ${url}:`, result);
           
           // Handle different possible return structures from fetchMetaData
           if (result && typeof result === 'object') {
@@ -466,8 +466,6 @@ export async function genStatic({ config, urls }: GenStaticProps) {
           } else {
             metadata = {};
           }
-          
-          console.log(`Using dynamic metadata for ${url}:`, metadata);
         } catch (error) {
           console.error(`Failed to fetch metadata for ${url}:`, error);
           if (error instanceof Error) {
@@ -499,7 +497,8 @@ export async function genStatic({ config, urls }: GenStaticProps) {
     const extractedMetadata = metadataMatch ? metadataMatch[1] : '';
 
     // Remove the metadata div from the markup to avoid it appearing in page content
-    const cleanedUrlHtmlMarkup = urlHtmlMarkup.replace(/<div data-testid="metadata">[\s\S]*?<\/div>/, '');
+    // Use global flag to remove all instances and make the regex more robust
+    const cleanedUrlHtmlMarkup = urlHtmlMarkup.replace(/<div[^>]*data-testid="metadata"[^>]*>[\s\S]*?<\/div>/g, '');
 
     // update the index.html with the rendered markup (without metadata div)
     let urlHtmlContent = indexHtmlContent.replace(
@@ -512,7 +511,7 @@ export async function genStatic({ config, urls }: GenStaticProps) {
     if (ssgNoScriptIndex !== -1) {
       urlHtmlContent = urlHtmlContent.replace(
         "<!-- ssg:noscript -->",
-        urlHtmlMarkup
+        cleanedUrlHtmlMarkup  // Use cleaned markup here too
       );
     }
 
@@ -555,19 +554,21 @@ export async function genStatic({ config, urls }: GenStaticProps) {
 
       // Generate title tag if title is provided
       if (metadata.title) {
-        metaTags.push(`<title>${metadata.title}</title>`);
+        metaTags.push(`<title>${escapeHtml(metadata.title)}</title>`);
       }
 
       // Generate description meta tags for SEO and social media
       if (metadata.description) {
-        metaTags.push(`<meta name="description" content="${metadata.description}">`); // SEO description
-        metaTags.push(`<meta property="og:description" content="${metadata.description}">`); // Open Graph (Facebook)
-        metaTags.push(`<meta name="twitter:description" content="${metadata.description}">`); // Twitter Card
+        const escapedDescription = escapeHtml(metadata.description);
+        metaTags.push(`<meta name="description" content="${escapedDescription}">`); // SEO description
+        metaTags.push(`<meta property="og:description" content="${escapedDescription}">`); // Open Graph (Facebook)
+        metaTags.push(`<meta name="twitter:description" content="${escapedDescription}">`); // Twitter Card
       }
       // Generate title meta tags for social media platforms
       if (metadata.title) {
-        metaTags.push(`<meta property="og:title" content="${metadata.title}">`); // Open Graph title (Facebook, LinkedIn)
-        metaTags.push(`<meta name="twitter:title" content="${metadata.title}">`); // Twitter Card title
+        const escapedTitle = escapeHtml(metadata.title);
+        metaTags.push(`<meta property="og:title" content="${escapedTitle}">`); // Open Graph title (Facebook, LinkedIn)
+        metaTags.push(`<meta name="twitter:title" content="${escapedTitle}">`); // Twitter Card title
       }
 
       // Handle both 'url' and 'canonical' fields for canonical URLs
@@ -581,9 +582,10 @@ export async function genStatic({ config, urls }: GenStaticProps) {
           : `${config.productionUrlBase}${canonicalUrl.startsWith('/') ? canonicalUrl : `/${canonicalUrl}`}`;
 
         // Generate canonical link tag and social media URL tags
-        metaTags.push(`<link rel="canonical" href="${absoluteCanonical}">`); // SEO canonical URL
-        metaTags.push(`<meta property="og:url" content="${absoluteCanonical}">`); // Open Graph URL
-        metaTags.push(`<meta name="twitter:url" content="${absoluteCanonical}">`); // Twitter Card URL
+        const escapedCanonical = escapeHtml(absoluteCanonical);
+        metaTags.push(`<link rel="canonical" href="${escapedCanonical}">`); // SEO canonical URL
+        metaTags.push(`<meta property="og:url" content="${escapedCanonical}">`); // Open Graph URL
+        metaTags.push(`<meta name="twitter:url" content="${escapedCanonical}">`); // Twitter Card URL
       }
 
       // Handle image metadata for social media previews
@@ -595,35 +597,41 @@ export async function genStatic({ config, urls }: GenStaticProps) {
           : `${config.productionUrlBase}${metadata.image.startsWith('/') ? metadata.image : `/assets/images/${metadata.image}`}`;
 
         // Generate social media image tags
-        metaTags.push(`<meta property="og:image" content="${absoluteImageUrl}">`); // Open Graph image
-        metaTags.push(`<meta name="twitter:image" content="${absoluteImageUrl}">`); // Twitter Card image
+        const escapedImageUrl = escapeHtml(absoluteImageUrl);
+        metaTags.push(`<meta property="og:image" content="${escapedImageUrl}">`); // Open Graph image
+        metaTags.push(`<meta name="twitter:image" content="${escapedImageUrl}">`); // Twitter Card image
       }
 
       // Generate alt text for social media images (accessibility and fallback)
       if (metadata.imageAlt) {
-        metaTags.push(`<meta property="og:image:alt" content="${metadata.imageAlt}">`); // Open Graph image alt text
-        metaTags.push(`<meta name="twitter:image:alt" content="${metadata.imageAlt}">`); // Twitter Card image alt text
+        const escapedImageAlt = escapeHtml(metadata.imageAlt);
+        metaTags.push(`<meta property="og:image:alt" content="${escapedImageAlt}">`); // Open Graph image alt text
+        metaTags.push(`<meta name="twitter:image:alt" content="${escapedImageAlt}">`); // Twitter Card image alt text
       }
 
       // Generate Open Graph content type (article, website, etc.)
       if (metadata.type) {
-        metaTags.push(`<meta property="og:type" content="${metadata.type}">`); // Open Graph content type
+        const escapedType = escapeHtml(metadata.type);
+        metaTags.push(`<meta property="og:type" content="${escapedType}">`); // Open Graph content type
       }
 
       // Generate site name metadata for branding
       if (metadata.siteName) {
-        metaTags.push(`<meta property="og:site_name" content="${metadata.siteName}">`); // Open Graph site name
-        metaTags.push(`<meta name="twitter:site" content="${metadata.siteName}">`); // Twitter site handle
+        const escapedSiteName = escapeHtml(metadata.siteName);
+        metaTags.push(`<meta property="og:site_name" content="${escapedSiteName}">`); // Open Graph site name
+        metaTags.push(`<meta name="twitter:site" content="${escapedSiteName}">`); // Twitter site handle
       }
 
       // Generate Twitter creator attribution
       if (metadata.twitterCreator) {
-        metaTags.push(`<meta name="twitter:creator" content="${metadata.twitterCreator}">`); // Twitter creator handle
+        const escapedTwitterCreator = escapeHtml(metadata.twitterCreator);
+        metaTags.push(`<meta name="twitter:creator" content="${escapedTwitterCreator}">`); // Twitter creator handle
       }
 
       // Generate Twitter Card type with fallback to large image format
       if (metadata.twitterCard || metadata.twitterCreator) {
-        metaTags.push(`<meta name="twitter:card" content="${metadata.twitterCard || 'summary_large_image'}">`); // Twitter Card format
+        const escapedTwitterCard = escapeHtml(metadata.twitterCard || 'summary_large_image');
+        metaTags.push(`<meta name="twitter:card" content="${escapedTwitterCard}">`); // Twitter Card format
       }
 
       // Join all generated meta tags into a single string with newlines
@@ -656,8 +664,15 @@ export async function genStatic({ config, urls }: GenStaticProps) {
       }
 
       if (tagType === "link") {
-        // Store link tags (typically canonical) with a special 'canonical' key
-        return { ...acc, canonical: metaTag.trim() };
+        // Handle different types of link tags properly
+        const relMatch = metaTag.match(/rel="([^"]+)"/);
+        if (relMatch) {
+          const relValue = relMatch[1];
+          // Use rel attribute value as the key for proper deduplication
+          return { ...acc, [`link-${relValue}`]: metaTag.trim() };
+        }
+        // Fallback for link tags without rel attribute
+        return { ...acc, 'link-other': metaTag.trim() };
       }
 
       // Handle meta tags by extracting their 'name' or 'property' attribute values
@@ -674,85 +689,84 @@ export async function genStatic({ config, urls }: GenStaticProps) {
       return acc; // Skip tags without identifiable attributes
     }, {}); // Initialize as empty object
 
-    // Create a set to track which metadata properties have been handled
-    // This prevents duplication when merging existing and new metadata
-    const handledMetadataKeys = new Set<string>();
-    const newHeadStrings: string[] = []; // Array to store the final merged head tags
-    let titleAdded = false; // Flag to ensure only one title tag is added per page
+    // Create a comprehensive approach to metadata merging with AGGRESSIVE deduplication
+    // This ensures NO duplicates by completely rebuilding the head section
+    const newHeadStrings: string[] = [];
+    const addedMetadataKeys = new Set<string>();
 
-    // Process each existing head tag and merge with new metadata
+    // First, add all non-metadata tags (scripts, styles, other tags)
     for (const line of headStrings) {
-      if (line.includes("<title>")) {
-        // Title tag handling: replace existing title with new one, prevent duplicates
-        if (!titleAdded && metaTagLib.title) {
-          // Replace existing title with new title from metadata
-          newHeadStrings.push(metaTagLib.title);
-          handledMetadataKeys.add('title');
-          titleAdded = true;
-        } else if (!titleAdded) {
-          // Keep original title if no new one provided
-          newHeadStrings.push(line);
-          titleAdded = true;
-        }
-        // Skip any additional title tags to prevent duplicates
-      } else if (line.includes(`<link rel="canonical"`)) {
-        // Canonical link handling: ensure only one canonical URL per page
-        if (metaTagLib.canonical && !handledMetadataKeys.has('canonical')) {
-          // Use new canonical URL from metadata
-          newHeadStrings.push(metaTagLib.canonical);
-          handledMetadataKeys.add('canonical');
-        } else if (!handledMetadataKeys.has('canonical')) {
-          // Keep existing canonical URL if no new one provided
-          newHeadStrings.push(line);
-          handledMetadataKeys.add('canonical');
-        }
-        // Skip duplicate canonical links
-      } else if (line.includes("<meta")) {
-        // Meta tag handling: merge existing and new meta tags, preventing duplicates
-        // Extract the 'name' or 'property' attribute value to identify the meta tag type
-        const nameMatch = line.match(/name="([^"]+)"/);
-        const propertyMatch = line.match(/property="([^"]+)"/);
-        const tagPropertyValue = nameMatch ? nameMatch[1] : (propertyMatch ? propertyMatch[1] : null);
-
-        // Only process if we haven't handled this meta tag type yet
-        if (tagPropertyValue && !handledMetadataKeys.has(tagPropertyValue)) {
-          const newTag = metaTagLib[tagPropertyValue];
-          if (newTag) {
-            // Use new meta tag from metadata if available
-            newHeadStrings.push(newTag);
-            handledMetadataKeys.add(tagPropertyValue);
-          } else {
-            // Keep existing meta tag if no new one provided
-            newHeadStrings.push(line);
-            handledMetadataKeys.add(tagPropertyValue);
-          }
-        }
-        // Skip duplicate meta tags (already handled ones) - they are intentionally not added
-      } else if (line.includes('<head>') && metaTagLib.title && !titleAdded) {
-        // Special case: Add title right after the <head> tag if no title was found in existing tags
-        // This ensures every page has a title tag even if the template doesn't include one
-        newHeadStrings.push(line);
-        newHeadStrings.push(metaTagLib.title);
-        handledMetadataKeys.add('title');
-        titleAdded = true;
-      } else {
-        // Keep all other existing head tags (scripts, styles, non-meta tags, etc.)
+      // Be more specific about what we consider "metadata" vs "other tags"
+      const isTitle = line.includes("<title>");
+      const isMeta = line.includes("<meta") && (line.includes('name="') || line.includes('property="'));
+      const isLink = line.includes("<link rel=");
+      
+      if (!isTitle && !isMeta && !isLink) {
+        // Keep all other head tags (scripts, styles, etc.)
         newHeadStrings.push(line);
       }
     }
 
-    // Final check: If no title was added during processing and we have one, add it now
-    // This is a safety net to ensure every page has a title tag
-    if (!titleAdded && metaTagLib.title) {
+    // Create a comprehensive list of all possible metadata keys to prevent ANY duplicates
+    const allPossibleMetaKeys = new Set([
+      'description', 'og:description', 'twitter:description',
+      'og:title', 'twitter:title',
+      'og:url', 'twitter:url',
+      'og:image', 'twitter:image',
+      'og:image:alt', 'twitter:image:alt',
+      'og:type', 'og:site_name', 'twitter:site',
+      'twitter:creator', 'twitter:card',
+      'viewport', 'theme-color', 'charset'
+    ]);
+
+    // Add title first - ONLY from new metadata if available
+    if (metaTagLib.title) {
       newHeadStrings.push(metaTagLib.title);
-      handledMetadataKeys.add('title');
+      addedMetadataKeys.add('title');
     }
 
-    // Add any remaining metadata tags that weren't handled during the merge process
-    // This catches any new metadata that doesn't replace existing tags
+    // Add ALL meta tags from the new metadata FIRST (prioritize new over old)
     for (const [key, value] of Object.entries(metaTagLib)) {
-      if (!handledMetadataKeys.has(key) && value && value.trim()) {
-        newHeadStrings.push(value); // Add the missed metadata tag
+      if (key !== 'title' && !key.startsWith('link-') && value && value.trim()) {
+        newHeadStrings.push(value);
+        addedMetadataKeys.add(key);
+      }
+    }
+
+    // Add ALL link tags from the new metadata FIRST (prioritize new over old)
+    for (const [key, value] of Object.entries(metaTagLib)) {
+      if (key.startsWith('link-') && value && value.trim()) {
+        newHeadStrings.push(value);
+        addedMetadataKeys.add(key);
+      }
+    }
+
+    // Finally, add ONLY original metadata that wasn't replaced AND isn't a known duplicate
+    for (const line of headStrings) {
+      if (line.includes("<title>")) {
+        // Skip all original title tags - we already added the new one or there is none
+        continue;
+      } else if (line.includes("<meta") && (line.includes('name="') || line.includes('property="'))) {
+        const nameMatch = line.match(/name="([^"]+)"/);
+        const propertyMatch = line.match(/property="([^"]+)"/);
+        const tagPropertyValue = nameMatch ? nameMatch[1] : (propertyMatch ? propertyMatch[1] : null);
+        
+        // Only add if we haven't added this metadata key AND it's not a known duplicate-prone key
+        if (tagPropertyValue && 
+            !addedMetadataKeys.has(tagPropertyValue) && 
+            !allPossibleMetaKeys.has(tagPropertyValue)) {
+          newHeadStrings.push(line);
+          addedMetadataKeys.add(tagPropertyValue);
+        }
+      } else if (line.includes("<link rel=")) {
+        const relMatch = line.match(/rel="([^"]+)"/);
+        const linkKey = relMatch ? `link-${relMatch[1]}` : 'link-other';
+        
+        // Only add if we haven't added this link type
+        if (!addedMetadataKeys.has(linkKey)) {
+          newHeadStrings.push(line);
+          addedMetadataKeys.add(linkKey);
+        }
       }
     }
 
