@@ -1,6 +1,6 @@
 {
   "name": "@accessitech/vite-ssg",
-  "version": "0.2.14",
+  "version": "0.3.0",
   "description": "A framework agnostic static site generator (ssg) using Vite.",
   "main": "src/index.ts",
   "types": "src/index.ts",
