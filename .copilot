@@ -10,12 +10,4 @@ This package is linked via yarn link for development and is being used in an adj
 - Static paths (`/`, `/blog`, `/404`, `/wcag`) should use static metadata files defined in `ssg.config.js`
 - Dynamic paths (like `/blog/post-name`, `/wcag/guideline-name`) should use metadata extracted from their individual `.md` files
 
-**Current Behavior**: 
-- Static paths work correctly
-- Dynamic paths are showing `"Using static metadata for [dynamic-url]"` and getting wrong metadata (e.g., a blog post getting WCAG guideline metadata)
-
-**Root Cause**: The global metadata mechanism (`global.currentMetadata`) intended for static paths is being used by dynamic pages instead of their individual metadata fetching logic.
-
-**Fix Needed**: In the client repo's `fetchMetaData` function, the global metadata check should only apply to static paths, not dynamic paths that should fetch from their own `.md` files.s project is a framework-agnostic static site generator (SSG) built on top of Vite. It uses a configuration file (`ssg.config.ts|js|json`) to define static paths, metadata, and build options. The generator fetches data (e.g., from an RSS feed), preloads content, renders pages using a user-provided server entry (`src/server.tsx`), merges metadata, and outputs static HTML files optimized for SEO. The codebase is TypeScript-based and leverages Vite’s SSR and plugin system for fast builds and extensibility. The package manager used in this project is yarn.
-
-This package is linked via yarn link for development and is being used in an adjacent client repo "AccessiTech". The client repo should use the typescript files in this project directly, not the build js files in the dist folder.
+This package is linked via yarn link for development and is being used in an adjacent client repo "AccessiTech". The client repo should use the typescript files in this project directly, not the build js files in the dist folder. Update version numbers in package.json via npm version minor

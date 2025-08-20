@@ -433,22 +433,28 @@ export async function genStatic({ config, urls }: GenStaticProps) {
       if (staticIndex !== -1 && config.staticMetaData[staticIndex]) {
         const metadataFile = config.staticMetaData[staticIndex];
         metadata = metadataCache[metadataFile] || {};
-        // console.log(`Using static metadata for static path ${url}`, metadata);
+        console.log(`Using static metadata for static path ${url}:`, metadata);
       } else {
         // Fallback to default metadata for static paths without metadata files
         metadata = {};
+        console.log(`No static metadata file found for static path ${url}, using empty metadata`);
       }
     } else {
       // For dynamic paths (blog posts, wcag pages), use fetchMetaData
+      console.log(`Processing dynamic path ${url}, fetchMetaData available:`, !!fetchMetaData);
       if (fetchMetaData) {
         try {
+          console.log(`Calling fetchMetaData for ${url}...`);
           const result = await fetchMetaData(url);
-          metadata = result.metaData;
+          console.log(`fetchMetaData result for ${url}:`, result);
+          metadata = result?.metaData || {};
+          console.log(`Using dynamic metadata for ${url}:`, metadata);
         } catch (error) {
           console.error(`Failed to fetch metadata for ${url}:`, error);
           metadata = {};
         }
       } else {
+        console.warn(`No fetchMetaData function available for dynamic path ${url}`);
         metadata = {};
       }
     }
