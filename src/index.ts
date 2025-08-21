@@ -520,27 +520,17 @@ export async function genStatic({ config, urls }: GenStaticProps) {
     const headEndIndex = urlHtmlContent.indexOf(headEnd);
     const headString = urlHtmlContent.slice(0, headEndIndex);
 
-    // Parse HTML tags from head section using an improved regex pattern
-    // This regex captures title, meta, link, script, and style tags from the <head>
+    // Parse HTML tags from head section using a robust regex pattern
+    // This regex captures all <title>, <meta>, <link>, <script>, and <style> tags, including single-line and multi-line, and self-closing tags
     const headStrings: string[] = [];
-
-    // Enhanced regex pattern that handles both single-line and multi-line HTML tags:
-    // Use [\s\S] instead of . to match any character including newlines (compatible with older JS)
-    // - (?:[\s\S]*?)     : Optional attributes (any characters including newlines, non-greedy)
-    // - >                : Closing of opening tag
-    // - (?:              : Non-capturing group for tag content alternatives
-    //   [\s\S]*?<\/\1>   : Paired tags: content + closing tag (e.g., <title>text</title>)
-    //   |                : OR
-    //   [\s\S]*?\/>      : Self-closing tags (e.g., <meta ... />)
-    // - )                : End non-capturing group
-    // - /gi              : Global and case-insensitive flags
-    const tagRegex = /<(title|meta|link|script|style)(?:[\s\S]*?)?>(?:[\s\S]*?<\/\1>|[\s\S]*?\/>)/gi;
+  // This regex matches any <title>, <meta>, <link>, <script>, or <style> tag, including self-closing, multi-line, and single-line tags at the end of head
+  const tagRegex = /<(title|meta|link|script|style)\b[\s\S]*?(?:\/>|>.*?<\/\1>|>)/gi;
     let match;
-
-    // Extract all matching HTML tags from the head section
-    // This captures existing metadata that needs to be preserved or replaced
+    // Extract all <title>, <meta>, <link>, <script>, and <style> tags from the <head> section using a robust regex.
+    // This loop ensures that all relevant tags (including multi-line and self-closing) are captured for later deduplication and merging.
+    // The extracted tags are pushed into headStrings for further processing.
     while ((match = tagRegex.exec(headString)) !== null) {
-      headStrings.push(match[0]); // Add the complete matched tag to our array
+      headStrings.push(match[0]);
     }
 
     // Generate metadata string from the metadata object
@@ -696,13 +686,21 @@ export async function genStatic({ config, urls }: GenStaticProps) {
 
     // First, add all non-metadata tags (scripts, styles, other tags)
     for (const line of headStrings) {
-      // Be more specific about what we consider "metadata" vs "other tags"
       const isTitle = line.includes("<title>");
       const isMeta = line.includes("<meta") && (line.includes('name="') || line.includes('property="'));
       const isLink = line.includes("<link rel=");
-      
+      // Use a robust regex to match rel="stylesheet" anywhere in the tag, case-insensitive
+      const isStylesheet = isLink && /rel\s*=\s*"stylesheet"/i.test(line);
+      const isPreload = isLink && /rel\s*=\s*"preload"/i.test(line);
+      const isIcon = isLink && /rel\s*=\s*"icon"/i.test(line);
+      const isManifest = isLink && /rel\s*=\s*"manifest"/i.test(line);
       if (!isTitle && !isMeta && !isLink) {
-        // Keep all other head tags (scripts, styles, etc.)
+        newHeadStrings.push(line);
+      } else if (isStylesheet) {
+        // Always preserve ALL stylesheet links, do not deduplicate
+        console.log(`[vite-ssg] Preserving <link rel=\"stylesheet\"> tag:`, line);
+        newHeadStrings.push(line);
+      } else if (isPreload || isIcon || isManifest) {
         newHeadStrings.push(line);
       }
     }
@@ -750,7 +748,6 @@ export async function genStatic({ config, urls }: GenStaticProps) {
         const nameMatch = line.match(/name="([^"]+)"/);
         const propertyMatch = line.match(/property="([^"]+)"/);
         const tagPropertyValue = nameMatch ? nameMatch[1] : (propertyMatch ? propertyMatch[1] : null);
-        
         // Only add if we haven't added this metadata key AND it's not a known duplicate-prone key
         if (tagPropertyValue && 
             !addedMetadataKeys.has(tagPropertyValue) && 
@@ -759,10 +756,15 @@ export async function genStatic({ config, urls }: GenStaticProps) {
           addedMetadataKeys.add(tagPropertyValue);
         }
       } else if (line.includes("<link rel=")) {
+        // Always preserve all <link rel="stylesheet"> tags (already handled above)
+        const isStylesheet = /rel\s*=\s*"stylesheet"/i.test(line);
+        if (isStylesheet) {
+          continue;
+        }
         const relMatch = line.match(/rel="([^"]+)"/);
+        const relValue = relMatch ? relMatch[1] : '';
         const linkKey = relMatch ? `link-${relMatch[1]}` : 'link-other';
-        
-        // Only add if we haven't added this link type
+        // Only add if we haven't added this link type (for canonical and other metadata links)
         if (!addedMetadataKeys.has(linkKey)) {
           newHeadStrings.push(line);
           addedMetadataKeys.add(linkKey);
