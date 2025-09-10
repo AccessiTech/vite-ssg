@@ -428,8 +428,8 @@ export async function genStatic({ config, urls }: GenStaticProps) {
   const vitePromises = urls.map(async (url: string, index: number) => {
     // console.log("Generating page for", url, "...");
 
-    if (preload && !config.staticPaths.includes(url)) {
-      await preload(url);
+    if (preload) {
+      await preload(url, config.staticPaths);
       // console.log("Preloaded data for", url);
     }
     // get the page metadata first
@@ -698,7 +698,7 @@ export async function genStatic({ config, urls }: GenStaticProps) {
         newHeadStrings.push(line);
       } else if (isStylesheet) {
         // Always preserve ALL stylesheet links, do not deduplicate
-        console.log(`[vite-ssg] Preserving <link rel=\"stylesheet\"> tag:`, line);
+        // console.log(`[vite-ssg] Preserving <link rel=\"stylesheet\"> tag:`, line);
         newHeadStrings.push(line);
       } else if (isPreload || isIcon || isManifest) {
         newHeadStrings.push(line);
